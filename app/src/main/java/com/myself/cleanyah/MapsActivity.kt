@@ -85,7 +85,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mFilters = arrayOf(IntentFilter(NFC_ACTION))
         mTechLists = arrayOf(arrayOf(NfcF::class.java.name))
 
-        mAdapter.enableReaderMode(
+        /*mAdapter.enableReaderMode(
             this,
             {
                 val idm: ByteArray = it.id
@@ -102,18 +102,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             },
             NfcAdapter.FLAG_READER_NFC_F,
             null
-        )
+        )*/
     }
 
     override fun onResume() {
         super.onResume()
         setCameraButton()
-        mAdapter.enableForegroundDispatch(this, mPendingIntent, mFilters, mTechLists)
+        //mAdapter.enableForegroundDispatch(this, mPendingIntent, mFilters, mTechLists)
     }
     override fun onPause() {
         super.onPause()
         if (this.isFinishing) {
-            mAdapter.disableForegroundDispatch(this)
+            //mAdapter.disableForegroundDispatch(this)
         }
     }
     override fun onStop() {

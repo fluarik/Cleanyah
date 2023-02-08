@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
+    <uses-feature android:name="android.hardware.nfc.hce"
+        android:required="true" />
+
     <application
         android:allowBackup="true"
         android:icon="@drawable/cat_image"
@@ -15,6 +18,19 @@
         android:supportsRtl="true"
         android:permission="android.permission.NFC"
         android:theme="@style/Theme.Cleanyah">
+
+        <service
+            android:name=".card_emu.HostCardEmulatorService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
 
         <meta-data
             android:name="com.google.android.maps.v2.API_KEY"
