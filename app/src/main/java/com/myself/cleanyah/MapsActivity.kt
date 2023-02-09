@@ -1,6 +1,7 @@
 package com.myself.cleanyah
 
 import android.Manifest
+import android.R.drawable
 import android.app.AlertDialog
 import android.app.PendingIntent
 import android.content.ContentValues
@@ -11,12 +12,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.nfc.NfcAdapter
-import android.nfc.Tag
 import android.nfc.tech.NfcF
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -34,7 +35,9 @@ import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
+import com.myself.cleanyah.card_emu.HostCardEmulatorService
 import com.myself.cleanyah.databinding.ActivityMapsBinding
+import java.security.AccessController.getContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -81,39 +84,34 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // for NFC
         mAdapter = NfcAdapter.getDefaultAdapter(this)
         mPendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
-        //mFilters = arrayOf(IntentFilter(NFC_ACTION).apply { this.addDataType("*/*") })
         mFilters = arrayOf(IntentFilter(NFC_ACTION))
         mTechLists = arrayOf(arrayOf(NfcF::class.java.name))
 
-        /*mAdapter.enableReaderMode(
+        mAdapter.enableReaderMode(
             this,
             {
-                val idm: ByteArray = it.id
-                val sb = java.lang.StringBuilder()
-                val formatter = Formatter(sb)
-                for (b in idm) {
-                    formatter.format("%02x", b)
-                }
-                val idmString: String = sb.toString().uppercase(Locale.getDefault())
-                //Toast.makeText(this , idmString, Toast.LENGTH_LONG).show()
                 Handler(Looper.getMainLooper()).postDelayed({
-                    showMessage("NFC読み取り")
+                    showPointMessage("清掃ありがとうニャ！！", "ゴミを片付けました　　+10pt!")
+                    reloadMaker(true, false)
                 }, 100)
             },
             NfcAdapter.FLAG_READER_NFC_F,
             null
-        )*/
+        )
+
+        startService(Intent(application, HostCardEmulatorService::class.java))
+        Log.i("MapsActivity", "startService")
     }
 
     override fun onResume() {
         super.onResume()
         setCameraButton()
-        //mAdapter.enableForegroundDispatch(this, mPendingIntent, mFilters, mTechLists)
+        mAdapter.enableForegroundDispatch(this, mPendingIntent, mFilters, mTechLists)
     }
     override fun onPause() {
         super.onPause()
         if (this.isFinishing) {
-            //mAdapter.disableForegroundDispatch(this)
+            mAdapter.disableForegroundDispatch(this)
         }
     }
     override fun onStop() {
@@ -144,9 +142,25 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mDialog = builder.create()
         mDialog.let {
             Handler(Looper.getMainLooper()).postDelayed({
-                mDialog!!.dismiss()
+                it!!.dismiss()
             }, 3000)
-            mDialog!!.show()
+            it!!.show()
+        }
+    }
+    private fun showPointMessage(title: String, text: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setMessage(text)
+        mDialog = builder.create()
+        mDialog?.let {
+            val imageView = ImageView(this)
+            imageView.setImageResource(R.drawable.cat_image2)
+            it.setTitle(title)
+            it.setView(imageView)
+            it.setMessage(text)
+            Handler(Looper.getMainLooper()).postDelayed({
+                it.dismiss()
+            }, 3000)
+            it.show()
         }
     }
     private fun showSendImageDialog(imageView: ImageView){
@@ -162,7 +176,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     Handler(Looper.getMainLooper()).postDelayed({
                         mDialog!!.dismiss()
                         window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-                        showMessage("画像を送信しました")
+                        showPointMessage("報告ありがとうニャ！！", "画像を報告しました　　+5pt!")
+                        reloadMaker(true, true)
                     }, 7000)
                     mDialog!!.show()
                     window.setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
@@ -238,22 +253,56 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val smallMarker = Bitmap.createScaledBitmap(b, width, height, false)
         return BitmapDescriptorFactory.fromBitmap(smallMarker)
     }
+    private fun setMaker(latitude: Double, longitude: Double, title: String, id: Int?): MarkerOptions {
+        val options = MarkerOptions()
+        options.position(LatLng(latitude, longitude))
+        options.title(title)
+        if (id != null)
+            options.icon(getMakerIcon(id))
+        return options
+    }
+
+    private lateinit var kawasakiMaker: MarkerOptions
+    private lateinit var catMaker: MarkerOptions
+    private lateinit var trashMaker: MarkerOptions
+    private fun moveCatMaker(double1: Double, double2: Double){
+        catMaker.position(LatLng(double1, double2))
+    }
+
+
+    private fun reloadMaker(isTrashPointChange: Boolean, isTrashPoint: Boolean){
+        /*/mMap.clear()
+        mMap.addMarker(kawasakiMaker)
+        mMap.addMarker(catMaker)
+        if (isTrashPointChange)
+            trashMaker.visible(isTrashPoint)
+        mMap.addMarker(trashMaker)
+
+         */
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
 
+        kawasakiMaker = setMaker(35.5319793421874, 139.69685746995052, "Marker!", null)
+        catMaker = setMaker(35.531685, 139.694082, "Cat!", R.drawable.spot_cat)
+        trashMaker = setMaker(35.531711, 139.6952532, "Trash!", R.drawable.spot_gomi)
         // Add a marker in Sydney and move the camera
         //val sydney = LatLng(-34.0, 151.0)
-        val kawasaki = LatLng(35.5319793421874, 139.69685746995052)
-        val marker = MarkerOptions().position(kawasaki).title("Marker!")
-        mMap.addMarker(marker)
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(kawasaki, 16.5F))
+        //val kawasaki = LatLng(35.5319793421874, 139.69685746995052)
+        val marker = catMaker
+        //mMap.addMarker(marker)
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(35.5319793421874, 139.69685746995052), 16.5F))
+        mMap.addMarker(kawasakiMaker)
+        mMap.addMarker(catMaker)
+        mMap.addMarker(trashMaker)
 
         val MIN_LAT_LNG = arrayOf(35.531685, 139.694082)
         //val MAX_LAT_LNG = arrayOf(35.531711, 139.695253)
 
-        val catMarker = MarkerOptions().position(LatLng(MIN_LAT_LNG[0], MIN_LAT_LNG[1])).title("Cat")
-        catMarker.icon(getMakerIcon(R.drawable.cat_spot))
-        mMap.addMarker(catMarker)
+        //val catMarker = MarkerOptions().position(LatLng(MIN_LAT_LNG[0], MIN_LAT_LNG[1])).title("Cat")
+        //catMarker.icon(getMakerIcon(R.drawable.spot_cat))
+        //mMap.addMarker(catMarker)
         mTimeCount = 0
         mLatVal[0] = MIN_LAT_LNG[0]
         mLatVal[1] = MIN_LAT_LNG[1]
@@ -276,7 +325,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         if (mTimeCount == 0)
                             mIsCountIncrease = true
                     }
-                    catMarker.position(LatLng(mLatVal[0], mLatVal[1]))
+                    moveCatMaker(mLatVal[0], mLatVal[1])
+                    reloadMaker(false, false)
                     //Log.i(LOG_TAG, "Task called.")
                 }
             }, 10, 1000
