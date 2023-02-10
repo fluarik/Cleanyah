@@ -4,5 +4,6 @@
 
     <string name="servicedesc">Host Card Emulator Service</string>
     <string name="aiddescription">Sample AID for testing</string>
+    <string name="buttonText">ゴミを撮影する</string>
 
 </resources>

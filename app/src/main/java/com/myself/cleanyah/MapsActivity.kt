@@ -35,8 +35,6 @@ import com.myself.cleanyah.card_emu.HostCardEmulatorService
 import com.myself.cleanyah.databinding.ActivityMapsBinding
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -58,9 +56,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mTechLists: Array<Array<String>>
     private var mMakerKawasaki: Marker? = null
     private var mMakerCat: Marker? = null
-    private var mMakerTrash: Marker? = null
-    private val mLock = ReentrantLock()
-    private val mTrashMap: MutableMap<Marker, ImageView> = mutableMapOf()
+    private val mMarkerTrashMap: MutableMap<Marker, Uri> = mutableMapOf()
+    private var mRemoveMarker: Marker? = null
     private var mIsNfcAuthentication = false
     companion object {
         const val PERMISSION_REQUEST_CODE = 1
@@ -79,10 +76,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         mCameraContent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
             if (result.resultCode == RESULT_OK) {
-                val imageView = ImageView(this)
-                imageView.setImageURI(mCameraImageUri)
-                imageView.adjustViewBounds = true
-                showSendImageDialog(imageView)
+                mCameraImageUri?.let {
+                    showSendImageDialog(it)
+                }
             }
         }
 
@@ -94,7 +90,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         mAdapter.enableReaderMode(
             this,
-            { mIsNfcAuthentication = true },
+            {
+                if (mIsNfcAuthentication) {
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        showMessage("清掃ありがとうニャ！！", "ゴミを片付けました　　+10pt!", 3000)
+                        mRemoveMarker?.let { removeTrashMaker(it) }
+                    }, 100)
+                    mIsNfcAuthentication = false
+                }
+
+            },
             NfcAdapter.FLAG_READER_NFC_F,
             null
         )
@@ -143,7 +148,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun showMessage(title: String?, text: String) {
+    private fun showMessage(title: String?, text: String, time: Long) {
         val builder = AlertDialog.Builder(this)
         if (title != null) {
             builder.setTitle(title).setIcon(R.drawable.cat_image2)
@@ -153,36 +158,42 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mDialog?.let {
             Handler(Looper.getMainLooper()).postDelayed({
                 it.dismiss()
-            }, 3000)
+            }, time)
             it.show()
         }
     }
-    private fun showSendImageDialog(imageView: ImageView){
-        AlertDialog.Builder(this)
-            .setTitle("画像を送信しますか")
-            .setPositiveButton("はい") { _, _ ->
-                val builder = AlertDialog.Builder(this)
-                builder.setMessage("画像の送信中です")
-                val progressBar = ProgressBar(this)
-                builder.setView(progressBar)
-                mDialog = builder.create()
-                mDialog.let {
+    private fun showSendImageDialog(imageUri: Uri){
+        val imageView = ImageView(this)
+        imageView.setImageURI(imageUri)
+        imageView.adjustViewBounds = true
+        val builder = AlertDialog.Builder(this)
+        builder.apply {
+            setTitle("画像を送信しますか")
+            setPositiveButton("はい") { _, _ ->
+                val builderPositive = AlertDialog.Builder(this@MapsActivity)
+                builderPositive.setMessage("画像の送信中です")
+                val progressBar = ProgressBar(this@MapsActivity)
+                builderPositive.setView(progressBar)
+                mDialog = builderPositive.create()
+                mDialog?.let {
                     Handler(Looper.getMainLooper()).postDelayed({
-                        mDialog!!.dismiss()
+                        it.dismiss()
                         window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-                        showMessage("報告ありがとうニャ！！", "ゴミを報告しました　　+5pt!")
-                        setTrashMaker()?.let { it1 -> mTrashMap[it1] = imageView }
+                        showMessage("報告ありがとうニャ！！", "ゴミを報告しました　　+5pt!", 3000)
+                        setTrashMaker()?.let { it1 -> mMarkerTrashMap[it1] = imageUri }
                     }, 7000)
-                    mDialog!!.show()
+                    it.show()
                     window.setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
                 }
             }
-            .setNegativeButton("いいえ") { _, _ ->
-                showMessage(null, "画像の送信をキャンセルしました")
+            setNegativeButton("いいえ") { _, _ ->
+                showMessage(null, "画像の送信をキャンセルしました", 3000)
             }
-            .setView(imageView)
-            .show()
+            setView(imageView)
+        }
+        val dialog = builder.create()
+        dialog.show()
     }
     private fun takePicture() {
         val dateFormat = SimpleDateFormat("yyyyMMddHHmmss", Locale.JAPAN)
@@ -196,7 +207,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         //外部ストレージのURIを生成する
         mCameraImageUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        intent.putExtra(MediaStore.EXTRA_OUTPUT,mCameraImageUri)
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, mCameraImageUri)
         mCameraContent.launch(intent)
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -250,7 +261,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun setMainMaker(): Marker? {
         val options = MarkerOptions()
         options.position(LatLng(35.5319793421874, 139.69685746995052))
-        options.title("Marker!")
+        options.title("Current!")
         options.draggable(true)
         return mMap.addMarker(options)
     }
@@ -292,8 +303,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                                 mIsCountIncrease = true
                         }
                         mMakerCat?.position = LatLng(mLatVal[0], mLatVal[1])
-                        //moveCatMaker(mLatVal[0], mLatVal[1])
-                        //reloadMaker(isTrashPointChange = false, isTrashPoint = false)
                     }
                     Log.i("MainActivity", "Timer Task called.")
                 }
@@ -302,7 +311,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         //mMoveCatIconThread.start()
     }
     private fun removeTrashMaker(marker: Marker){
+        mMarkerTrashMap.remove(marker)
+        marker.remove()
     }
+
+    private fun authenticationDialog(marker: Marker) {
+        val builder = AlertDialog.Builder(this@MapsActivity)
+        builder.setTitle("ゴミを片付けましたか")
+        builder.setPositiveButton("はい") { _, _ ->
+            mIsNfcAuthentication = true
+            showMessage(null,"くりーにゃーにスマホをタッチしてください。", 5000)
+            mRemoveMarker = marker
+            Handler(Looper.getMainLooper()).postDelayed({
+                mIsNfcAuthentication = false
+            }, 6000)
+        }
+        builder.setNegativeButton("いいえ") {_, _ -> }
+        val imageView = ImageView(this)
+        imageView.setImageURI(mMarkerTrashMap[marker])
+        imageView.adjustViewBounds = true
+        builder.setView(imageView)
+        val dialog = builder.create()
+        dialog.show()
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         //val MIN_LAT_LNG = arrayOf(35.531685, 139.694082)
         //val MAX_LAT_LNG = arrayOf(35.531711, 139.695253)
@@ -324,43 +356,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onMarkerDrag(marker: Marker) {
             }
         })
+
         mMap.setOnMarkerClickListener { p0 ->
             if (p0 != mMakerKawasaki && p0 != mMakerCat) {
-                val imageView = mTrashMap[p0]
-                imageView?.let {
-                    val builder = AlertDialog.Builder(this)
-                    builder.setTitle("ゴミを片付けましたか")
-                    builder.setPositiveButton("はい") { _, _ ->
-                        mIsNfcAuthentication = false
-                        val builder1 = AlertDialog.Builder(this)
-                        builder1.setMessage("くりーにゃーにスマホをタッチしてください。")
-                        //mDialog.let { it!!.dismiss() }
-                        //mDialog = builder1.create()
-                        //mDialog.let { it!!.show() }
-                        val dialog1 = builder1.create()
-                        dialog1.show()
-
-                        var count = 0
-                        while (!mIsNfcAuthentication) {
-                            Thread.sleep(1)
-                            count += 1
-                            if (count > 5000) break
-                        }
-                        dialog1.dismiss()
-                        if (mIsNfcAuthentication) {
-                            showMessage("清掃ありがとうニャ！！", "ゴミを片付けました　　+10pt!")
-                            mTrashMap.remove(p0)
-                            p0.remove()
-                        }
-                    }
-                    builder.setNegativeButton("いいえ") {_, _ ->}
-                    //builder.setView(imageView)
-                    //mDialog.let { it!!.dismiss() }
-                    //mDialog = builder.create()
-                    //mDialog.let { it!!.show() }
-                    val dialog = builder.create()
-                    dialog.show()
-                }
+                Handler(Looper.getMainLooper()).postDelayed({
+                    authenticationDialog(p0)
+                }, 100)
             }
             false
         }

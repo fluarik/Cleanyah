@@ -17,9 +17,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="20dp"
+        android:textSize="18sp"
         android:background="@drawable/button_back"
         android:layout_gravity="bottom"
-        android:text="ゴミを撮影する"
+        android:text="@string/buttonText"
         map:icon="@drawable/ic_baseline_photo_camera_24" />
 
 </FrameLayout>
