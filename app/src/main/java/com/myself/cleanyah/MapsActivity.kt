@@ -31,7 +31,6 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
-import com.myself.cleanyah.card_emu.HostCardEmulatorService
 import com.myself.cleanyah.databinding.ActivityMapsBinding
 import java.text.SimpleDateFormat
 import java.util.*
@@ -56,7 +55,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mTechLists: Array<Array<String>>
     private var mMakerKawasaki: Marker? = null
     private var mMakerCat: Marker? = null
-    private val mMarkerTrashMap: MutableMap<Marker, Uri> = mutableMapOf()
+    private val mMarkerTrashMap: MutableMap<Marker, Uri?> = mutableMapOf()
     private var mRemoveMarker: Marker? = null
     private var mIsNfcAuthentication = false
     companion object {
@@ -93,10 +92,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             {
                 if (mIsNfcAuthentication) {
                     Handler(Looper.getMainLooper()).postDelayed({
-                        showMessage("清掃ありがとうニャ！！", "ゴミを片付けました　　+10pt!", 3000)
+                        showMessage("清掃ありがとうニャ！！", "ゴミを片付けました　　+10pt!", 10000)
                         mRemoveMarker?.let { removeTrashMaker(it) }
                     }, 100)
                     mIsNfcAuthentication = false
+                    mDialog?.dismiss()
                 }
 
             },
@@ -114,7 +114,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mAdapter.enableForegroundDispatch(this, mPendingIntent, mFilters, mTechLists)
         if (!mIsTimerStart) {
             mIsTimerStart = true
-            startMoveCatIcon()
+            Handler(Looper.getMainLooper()).postDelayed({
+                startMoveCatIcon()
+            }, 10)
         }
     }
     override fun onPause() {
@@ -179,8 +181,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     Handler(Looper.getMainLooper()).postDelayed({
                         it.dismiss()
                         window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-                        showMessage("報告ありがとうニャ！！", "ゴミを報告しました　　+5pt!", 3000)
-                        setTrashMaker()?.let { it1 -> mMarkerTrashMap[it1] = imageUri }
+                        showMessage("報告ありがとうニャ！！", "ゴミを報告しました　　+5pt!", 10000)
+                        setTrashMaker()?.let { it -> mMarkerTrashMap[it] = imageUri }
                     }, 7000)
                     it.show()
                     window.setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
@@ -188,7 +190,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }
             setNegativeButton("いいえ") { _, _ ->
-                showMessage(null, "画像の送信をキャンセルしました", 3000)
+                showMessage(null, "画像の送信をキャンセルしました", 10000)
             }
             setView(imageView)
         }
@@ -252,15 +254,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun getMakerIcon(id: Int): BitmapDescriptor {
-        val width = 92
-        val height = 120
+        val width = 184
+        val height = 240
         val b = BitmapFactory.decodeResource(resources, id)
         val smallMarker = Bitmap.createScaledBitmap(b, width, height, false)
         return BitmapDescriptorFactory.fromBitmap(smallMarker)
     }
     private fun setMainMaker(): Marker? {
         val options = MarkerOptions()
-        options.position(LatLng(35.5319793421874, 139.69685746995052))
+        options.position(LatLng(35.53231461303972, 139.69483742213728))
         options.title("Current!")
         options.draggable(true)
         return mMap.addMarker(options)
@@ -278,7 +280,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         options.title("Trash!")
         options.icon(getMakerIcon(R.drawable.spot_gomi))
         val marker = mMap.addMarker(options)
-        marker?.let { it.position = mMakerKawasaki?.position!! }
+        marker?.let {
+            if (mMakerKawasaki != null)
+                it.position = mMakerKawasaki?.position!!
+        }
         return marker
     }
     private fun startMoveCatIcon() {
@@ -314,34 +319,37 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mMarkerTrashMap.remove(marker)
         marker.remove()
     }
-
     private fun authenticationDialog(marker: Marker) {
         val builder = AlertDialog.Builder(this@MapsActivity)
         builder.setTitle("ゴミを片付けましたか")
         builder.setPositiveButton("はい") { _, _ ->
             mIsNfcAuthentication = true
-            showMessage(null,"くりーにゃーにスマホをタッチしてください。", 5000)
+            showMessage(null,"くりーにゃーにスマホをタッチしてください。", 15000)
             mRemoveMarker = marker
             Handler(Looper.getMainLooper()).postDelayed({
                 mIsNfcAuthentication = false
-            }, 6000)
+            }, 15000)
         }
         builder.setNegativeButton("いいえ") {_, _ -> }
         val imageView = ImageView(this)
-        imageView.setImageURI(mMarkerTrashMap[marker])
-        imageView.adjustViewBounds = true
+        if (mMarkerTrashMap[marker] != null) {
+            imageView.setImageURI(mMarkerTrashMap[marker])
+            imageView.adjustViewBounds = true
+        } else {
+            imageView.setImageResource(R.drawable.gomi_temp)
+        }
         builder.setView(imageView)
         val dialog = builder.create()
         dialog.show()
     }
-
     override fun onMapReady(googleMap: GoogleMap) {
         //val MIN_LAT_LNG = arrayOf(35.531685, 139.694082)
         //val MAX_LAT_LNG = arrayOf(35.531711, 139.695253)
         mMap = googleMap
+        val makerTrash = setTrashMaker()
+        makerTrash?.let { it -> mMarkerTrashMap[it] = null }
         mMakerKawasaki = setMainMaker()
         mMakerCat = setCatMaker()
-        //mMakerTrash = setTrashMaker()
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(35.5319793421874, 139.69685746995052), 16.5F))
         mMap.setOnMarkerDragListener(object : GoogleMap.OnMarkerDragListener {
             override fun onMarkerDragStart(marker: Marker) {

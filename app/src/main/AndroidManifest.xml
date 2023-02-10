@@ -20,7 +20,7 @@
         android:theme="@style/Theme.Cleanyah">
 
         <service
-            android:name=".card_emu.HostCardEmulatorService"
+            android:name=".HostCardEmulatorService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
             <intent-filter>
@@ -34,7 +34,7 @@
 
         <meta-data
             android:name="com.google.android.maps.v2.API_KEY"
-            android:value="MAPS_API_KEY" />
+            android:value="$MAPS_API_KEY" />
 
         <activity
             android:name=".MapsActivity"
